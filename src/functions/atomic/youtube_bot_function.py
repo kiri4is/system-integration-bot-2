@@ -9,6 +9,7 @@ import telebot
 from telebot import types
 from telebot.callback_data import CallbackData
 from bot_func_abc import AtomicBotFunctionABC
+from yt_dlp.utils import DownloadError
 
 try:
     import yt_dlp
@@ -87,7 +88,7 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
 
         try:
             info = self._fetch_info(url)
-        except Exception as exc:
+        except DownloadError as exc:
             self.bot.edit_message_text(
                 f"❌ Ошибка: {exc}", message.chat.id, wait_msg.message_id
             )
@@ -130,7 +131,7 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
                     caption, message.chat.id, wait_msg.message_id,
                     reply_markup=markup, parse_mode="Markdown"
                 )
-        except Exception:
+        except Exception as exc:
             self.bot.send_message(
                 message.chat.id, caption,
                 reply_markup=markup, parse_mode="Markdown"
@@ -219,7 +220,7 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
 
                 self.bot.delete_message(chat_id, status_msg.message_id)
 
-            except Exception as exc:
+            except DownloadError as exc:
                 self.bot.edit_message_text(
                     f"❌ Ошибка при скачивании: {exc}", chat_id, status_msg.message_id
                 )
