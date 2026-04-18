@@ -195,8 +195,9 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
 
                 filepath = os.path.join(tmpdir, files[0])
                 size     = os.path.getsize(filepath)
+                max_size = os.environ.get("MAX_BOT_FILE_SIZE")
 
-                if size > MAX_BOT_FILE_SIZE:
+                if size > max_size:
                     self.bot.edit_message_text(
                         f"⚠️ Файл слишком большой ({size // (1024 * 1024)} МБ).\n"
                         "Telegram не принимает файлы больше 50 МБ.\n"
