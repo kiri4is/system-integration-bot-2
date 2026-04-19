@@ -54,10 +54,11 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
 
 
     def set_handlers(self, bot: telebot.TeleBot):
+        """Зарегистрируйте все обработчики сообщений и обратных вызовов в боте."""
         self.bot = bot
-
         @bot.message_handler(commands=self.commands)
         def cmd_youtube(message: types.Message):
+            """Обработайте команду /youtube."""
             bot.send_message(
                 message.chat.id,
                 "🎬 Отправьте ссылку на YouTube:",
@@ -66,15 +67,19 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
 
         @bot.message_handler(func=lambda m: bool(YOUTUBE_REGEX.search(m.text or "")))
         def inline_link(message: types.Message):
+            """Обрабатывать встроенные ссылки YouTube, отправляемые в виде обычных сообщений."""
             self._handle_link(message)
 
         @bot.callback_query_handler(func=None, config=self._cb.filter())
         def quality_callback(call: types.CallbackQuery):
+            """Обрабатывать запросы обратного вызова для выбора качества."""
             data = self._cb.parse(call.data)
             self._download_and_send(call, data["video_id"], data["fmt_id"])
 
 
     def _handle_link(self, message: types.Message):
+        """ Извлеките URL-адрес YouTube из сообщения и предоставьте и
+        нформацию о видео с возможностью выбора качества."""
         text = message.text or ""
         match = YOUTUBE_REGEX.search(text)
         if not match:
@@ -95,16 +100,37 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
             )
             return
 
+        _, caption, markup = self._build_video_card(message.chat.id, url, info)
+
+        try:
+            thumb = info.get("thumbnail")
+            if thumb:
+                self.bot.delete_message(message.chat.id, wait_msg.message_id)
+                self.bot.send_photo(
+                    message.chat.id, thumb,
+                    caption=caption, reply_markup=markup, parse_mode="Markdown"
+                )
+            else:
+                self.bot.edit_message_text(
+                    caption, message.chat.id, wait_msg.message_id,
+                    reply_markup=markup, parse_mode="Markdown"
+                )
+        except Exception: # pylint: disable=broad-except
+            self.bot.send_message(
+                message.chat.id, caption,
+                reply_markup=markup, parse_mode="Markdown"
+            )
+
+    def _build_video_card(self, chat_id : int, url : str, info : dict):
         video_id  = (info.get("id") or "unknown")[:16]
         title     = info.get("title", "Неизвестно")
         duration  = self._fmt_duration(info.get("duration", 0))
         channel   = info.get("uploader", "?")
-        thumb     = info.get("thumbnail")
         views     = info.get("view_count")
         views_str = f"👁 {views:,}".replace(",", " ") if views else ""
 
         formats = self._pick_formats(info.get("formats", []))
-        self._sessions[message.chat.id] = {
+        self._sessions[chat_id] = {
             "video_id": video_id,
             "url":      url,
             "formats":  formats,
@@ -119,25 +145,65 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
         )
 
         markup = self._build_quality_markup(video_id, formats)
+        return video_id, caption, markup
 
-        try:
-            if thumb:
-                self.bot.delete_message(message.chat.id, wait_msg.message_id)
-                self.bot.send_photo(
-                    message.chat.id, thumb,
-                    caption=caption, reply_markup=markup, parse_mode="Markdown"
+    def _build_ydl_opts(self, tmpdir: str, fmt_id: str, chosen: dict) -> dict:
+        """Создать параметры yt-dlp для выбранного формата."""
+        out_tmpl   = os.path.join(tmpdir, "%(title)s.%(ext)s")
+        audio_only = chosen.get("audio_only", False)
+
+        ydl_opts = {
+            "outtmpl":     out_tmpl,
+            "quiet":       True,
+            "no_warnings": True,
+            "noplaylist":  True,
+            "ffmpeg_location":  self._ffmpeg_path,
+            }
+
+        if audio_only:
+            ydl_opts["format"] = "bestaudio/best"
+            ydl_opts["postprocessors"] = [{
+                "key":            "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                }]
+        else:
+            ydl_opts["format"] = (
+                f"{fmt_id}+bestaudio/best[height<={chosen.get('height', 1080)}]"
                 )
-            else:
-                self.bot.edit_message_text(
-                    caption, message.chat.id, wait_msg.message_id,
-                    reply_markup=markup, parse_mode="Markdown"
+            ydl_opts["merge_output_format"] = "mp4"
+
+        return ydl_opts
+
+    def _send_downloaded_file(self, chat_id: int, tmpdir: str,
+           audio_only: bool, status_msg_id: int):
+        files = os.listdir(tmpdir)
+        if not files:
+            raise FileNotFoundError("Файл не был создан.")
+
+        filepath = os.path.join(tmpdir, files[0])
+        size     = os.path.getsize(filepath)
+        max_size = int(os.environ.get("MAX_BOT_FILE_SIZE", 50 * 1024 * 1024))
+
+        if size > max_size:
+            self.bot.edit_message_text(
+                f"⚠️ Файл слишком большой ({size // (1024 * 1024)} МБ).\n"
+                "Telegram не принимает файлы больше 50 МБ.\n"
+                "Пожалуйста, выберите качество пониже.",
+                chat_id, status_msg_id
                 )
-        except Exception as exc:
-            self.bot.send_message(
-                message.chat.id, caption,
-                reply_markup=markup, parse_mode="Markdown"
+            return
+
+        self.bot.edit_message_text(
+            "📤 Загружаю в Telegram…", chat_id, status_msg_id
             )
 
+        with open(filepath, "rb") as f:
+            if audio_only:
+                self.bot.send_audio(chat_id, f)
+            else:
+                self.bot.send_video(chat_id, f, supports_streaming=True)
+
+            self.bot.delete_message(chat_id, status_msg_id)
 
     def _download_and_send(self, call: types.CallbackQuery, video_id: str, fmt_id: str):
         chat_id = call.message.chat.id
@@ -165,62 +231,13 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            out_tmpl   = os.path.join(tmpdir, "%(title)s.%(ext)s")
+            ydl_opts   = self._build_ydl_opts(tmpdir, fmt_id, chosen)
             audio_only = chosen.get("audio_only", False)
-
-            ydl_opts = {
-                "outtmpl":     out_tmpl,
-                "quiet":       True,
-                "no_warnings": True,
-                "noplaylist":  True,
-                "ffmpeg_location":  self._ffmpeg_path,
-            }
-
-            if audio_only:
-                ydl_opts["format"] = "bestaudio/best"
-                ydl_opts["postprocessors"] = [{
-                    "key":            "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                }]
-            else:
-                ydl_opts["format"] = (
-                    f"{fmt_id}+bestaudio/best[height<={chosen.get('height', 1080)}]"
-                )
-                ydl_opts["merge_output_format"] = "mp4"
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
-
-                files = os.listdir(tmpdir)
-                if not files:
-                    raise FileNotFoundError("Файл не был создан.")
-
-                filepath = os.path.join(tmpdir, files[0])
-                size     = os.path.getsize(filepath)
-                max_size = os.environ.get("MAX_BOT_FILE_SIZE")
-
-                if size > max_size:
-                    self.bot.edit_message_text(
-                        f"⚠️ Файл слишком большой ({size // (1024 * 1024)} МБ).\n"
-                        "Telegram не принимает файлы больше 50 МБ.\n"
-                        "Пожалуйста, выберите качество пониже.",
-                        chat_id, status_msg.message_id
-                    )
-                    return
-
-                self.bot.edit_message_text(
-                    "📤 Загружаю в Telegram…", chat_id, status_msg.message_id
-                )
-
-                with open(filepath, "rb") as f:
-                    if audio_only:
-                        self.bot.send_audio(chat_id, f)
-                    else:
-                        self.bot.send_video(chat_id, f, supports_streaming=True)
-
-                self.bot.delete_message(chat_id, status_msg.message_id)
-
+                    self._send_downloaded_file(chat_id, tmpdir, audio_only, status_msg.message_id)
             except DownloadError as exc:
                 self.bot.edit_message_text(
                     f"❌ Ошибка при скачивании: {exc}", chat_id, status_msg.message_id
