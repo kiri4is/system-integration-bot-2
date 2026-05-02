@@ -296,7 +296,7 @@ class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
     """
 
     commands: List[str] = ["currencies", "rate"]
-    authors: List[str] = ["Pokoiting"]
+    authors: List[str] = ["Pokoiting,Yurmen2"]
     about: str = "Информация о валютах и курсах"
     description: str = """
     Предоставляет список поддерживаемых валют и их курсы
