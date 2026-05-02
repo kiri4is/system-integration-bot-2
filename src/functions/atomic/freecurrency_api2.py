@@ -126,11 +126,11 @@ class FreeCurrencyAPIClient:
 
         if isinstance(data, dict) and "data" in data:
             return data["data"]
-        
+
         # Для эндпоинта currencies API может вернуть словарь напрямую без обертки 'data'
         if isinstance(data, dict) and data and not any(key in data for key in ['data', 'message']):
             return data
-            
+
         response_text_preview = response.text[:500] if response else "N/A"
         self.logger.warning(
             "Неожиданная структура ответа API. " + "Ожидали {'data': ...}, получили: %s",
@@ -159,7 +159,6 @@ class FreeCurrencyAPIClient:
         all_params["apikey"] = self.api_key
 
         response = None
-        data = None
 
         try:
             log_message = "Выполнение запроса к API %s " + "с параметрами %s"
@@ -260,7 +259,7 @@ class FreeCurrencyAPIClient:
         )
         params = {
             "base_currency": base_currency.upper(),
-            "currencies": target_currency.upper(),  # Исправлено: 'currencies' вместо 'symbols'
+            "currencies": target_currency.upper(),
         }
         try:
             rates_data = self._make_request("latest", params=params)
@@ -271,41 +270,14 @@ class FreeCurrencyAPIClient:
                 )
 
             target_currency_upper = target_currency.upper()
-            
-            # API может вернуть данные в разных форматах
-            if isinstance(rates_data, dict):
-                if target_currency_upper in rates_data:
-                    rate = rates_data[target_currency_upper]
-                elif base_currency.upper() in rates_data:
-                    # Если API вернул курсы относительно другой базы
-                    rate = rates_data.get(base_currency.upper())
-                    if rate:
-                        rate = 1.0 / rate
-                    else:
-                        raise FreeCurrencyAPIClientError(
-                            f"Курс для {target_currency} не найден в ответе API."
-                        )
-                else:
-                    # Пробуем найти в любом доступном формате
-                    for key, value in rates_data.items():
-                        if isinstance(value, (int, float)):
-                            rate = value
-                            break
-                    else:
-                        raise FreeCurrencyAPIClientError(
-                            f"Курс для {target_currency} не найден в ответе API."
-                        )
-            else:
-                raise FreeCurrencyAPIClientError(
-                    f"Неожиданный формат ответа API: {type(rates_data)}"
-                )
+            rate = self._extract_rate_from_response(rates_data, target_currency_upper, base_currency)
 
             # Дополнительно: проверяем, что rate — число
             if not isinstance(rate, (int, float)):
                 raise FreeCurrencyAPIClientError(
                     f"Некорректное значение курса: {rate!r}"
                 )
-            
+
             self.logger.info(
                 "Курс получен: 1 %s = %s %s",
                 base_currency.upper(),
@@ -324,6 +296,46 @@ class FreeCurrencyAPIClient:
             raise FreeCurrencyAPIClientError(
                 f"Непредвиденная ошибка: {e}"
             ) from e
+
+    def _extract_rate_from_response(
+        self, rates_data: Dict[str, Any], target_currency: str, base_currency: str
+    ) -> float:
+        """
+        Извлекает курс обмена из ответа API.
+
+        Args:
+            rates_data: Данные от API.
+            target_currency: Целевая валюта.
+            base_currency: Базовая валюта.
+
+        Returns:
+            Курс обмена.
+
+        Raises:
+            FreeCurrencyAPIClientError: Если курс не найден.
+        """
+        if not isinstance(rates_data, dict):
+            raise FreeCurrencyAPIClientError(
+                f"Неожиданный формат ответа API: {type(rates_data)}"
+            )
+
+        if target_currency in rates_data:
+            return rates_data[target_currency]
+
+        if base_currency.upper() in rates_data:
+            # Если API вернул курсы относительно другой базы
+            rate = rates_data.get(base_currency.upper())
+            if rate:
+                return 1.0 / rate
+
+        # Пробуем найти в любом доступном формате
+        for value in rates_data.values():
+            if isinstance(value, (int, float)):
+                return value
+
+        raise FreeCurrencyAPIClientError(
+            f"Курс для {target_currency} не найден в ответе API."
+        )
 
 
 class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
