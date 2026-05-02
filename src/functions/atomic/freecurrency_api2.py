@@ -253,7 +253,7 @@ class FreeCurrencyAPIClient:
     try:
         rates_data = self._make_request("latest", params=params)
 
-        # Критическая фикс: проверка на None
+        
         if rates_data is None:
             raise FreeCurrencyAPIClientError(
                 f"API вернул пустой ответ при запросе курса {target_currency}/{base_currency}."
@@ -296,7 +296,7 @@ class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
     """
 
     commands: List[str] = ["currencies", "rate"]
-    authors: List[str] = ["Yurmen2"]
+    authors: List[str] = ["Pokoiting"]
     about: str = "Информация о валютах и курсах"
     description: str = """
     Предоставляет список поддерживаемых валют и их курсы
