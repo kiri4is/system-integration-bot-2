@@ -270,9 +270,10 @@ class FreeCurrencyAPIClient:
                 )
 
             target_currency_upper = target_currency.upper()
-            rate = self._extract_rate_from_response(rates_data, target_currency_upper, base_currency)
+            rate = self._extract_rate_from_response(rates_data,
+                                                    target_currency_upper,
+                                                      base_currency)
 
-            # Дополнительно: проверяем, что rate — число
             if not isinstance(rate, (int, float)):
                 raise FreeCurrencyAPIClientError(
                     f"Некорректное значение курса: {rate!r}"
@@ -397,7 +398,7 @@ class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
 
         return args[0].upper(), args[1].upper()
 
-    def _get_and_send_currency_rate(
+    def get_and_send_currency_rate(
         self,
         chat_id: int,
         target_currency: str,
@@ -515,6 +516,6 @@ class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
 
             target_currency, base_currency = arg_result
 
-            self._get_and_send_currency_rate(
+            self.get_and_send_currency_rate(
                 chat_id, target_currency, base_currency, message
             )
