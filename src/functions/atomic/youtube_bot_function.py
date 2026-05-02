@@ -31,8 +31,8 @@ YOUTUBE_REGEX = re.compile(
 class YouTubeDownloaderFunction(AtomicBotFunctionABC):
     """Скачивает видео с YouTube и отправляет пользователю."""
 
-    commands: List[str] = ["youtube"]
-    authors: List[str] = ["Sahil Isgandarov"]
+    commands: List[str] = ["yt" , "youtube"]
+    authors: List[str] = ["sahilisgandarov"]
     about: str = "Загрузчик видео с YouTube."
     description: str = (
         "Отправьте ссылку на YouTube — покажу информацию о видео и доступные качества.\n"
@@ -42,7 +42,7 @@ class YouTubeDownloaderFunction(AtomicBotFunctionABC):
     state: bool = True
 
     def __init__(self):
-        self._cb = CallbackData("yt_action", "video_id", "fmt_id", prefix="yt")
+        self._cb = CallbackData("yt_action", "video_id", "fmt_id", prefix=self.commands[0])
         self._sessions: dict = {}
         self._ffmpeg_path = None
         self.bot = None
