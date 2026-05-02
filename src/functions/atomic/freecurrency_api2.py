@@ -239,10 +239,10 @@ class FreeCurrencyAPIClient:
             self.logger.error("Не удалось получить валюты: %s", e)
             raise
 
-    def def get_exchange_rate(
+    def get_exchange_rate(
     self, target_currency: str, base_currency: str = "USD"
 ) -> float:
-    """Получает последний курс обмена для целевой валюты."""
+    #"""Получает последний курс обмена для целевой валюты."""
     self.logger.info(
         "Получение курса для %s к %s...", target_currency, base_currency
     )
@@ -349,14 +349,14 @@ class AtomicCurrencyBotFunction(AtomicBotFunctionABC):
 
         return args[0].upper(), args[1].upper()
 
-    def def _get_and_send_currency_rate(
+    def _get_and_send_currency_rate(
     self,
     chat_id: int,
     target_currency: str,
     base_currency: str,
     message: types.Message,
 ) -> None:
-    """Получает курс валюты и отправляет результат."""
+    #"""Получает курс валюты и отправляет результат."""
     self.bot.send_message(
         chat_id,
         f"Загружаю курс {target_currency} к {base_currency}...",
