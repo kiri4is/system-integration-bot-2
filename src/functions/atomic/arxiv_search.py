@@ -23,7 +23,7 @@ class ArxivSearchBotFunction(AtomicBotFunctionABC):
     """Поиск научных статей на arXiv через Telegram бота."""
 
     commands: List[str] = ["arxiv"]
-    authors: List[str] = ["YourGithubUsername"]
+    authors: List[str] = ["kiri4is"]
     about: str = "Поиск статей на arXiv"
     description: str = (
         "Поиск научных статей на платформе arXiv.\n\n"
